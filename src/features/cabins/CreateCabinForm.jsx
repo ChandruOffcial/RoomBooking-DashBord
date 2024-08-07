@@ -1,49 +1,64 @@
+import useEditCabin from "./useEditCabin";
+import useCreateCabin from "./useCreateCabin";
+import PropTypes from "prop-types";
+
 import Input from "../../ui/input";
 import Form from "../../ui/Form";
 import Button from "../../ui/Button";
 import FileInput from "../../ui/FileInput";
 import Textarea from "../../ui/Textarea";
 import { useForm } from "react-hook-form";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createCabin } from "../../services/apiCabins";
-import toast from "react-hot-toast";
+
 import FormRow from "../../ui/FormRow";
 
-function CreateCabinForm({ cabin = {} }) {
-	const queryClient = useQueryClient();
-	const { id: isEditId, ...editCabin } = cabin;
+function CreateCabinForm({ cabin = {}, onCloseModel }) {
+	const { createCabin, createingStatus } = useCreateCabin();
+
+	const { editCabin, editingStatus } = useEditCabin();
+
+	const isDisable = editingStatus || createingStatus;
+
+	const { id: isEditId, ...editCabinData } = cabin;
 
 	const isEdit = Boolean(isEditId);
+
 	const { register, handleSubmit, reset, getValues, formState } = useForm({
 		mode: "onTouched",
-		defaultValues: isEdit ? editCabin : {},
+		defaultValues: isEdit ? editCabinData : {},
 	});
 
-	const { mutate, isPending } = useMutation({
-		mutationFn: createCabin,
-		onSuccess: () => {
-			toast.success("New Cabin Created.");
-			queryClient.invalidateQueries({
-				queryKey: ["cabins"],
-			});
-			reset();
-		},
-		onError: (err) => {
-			toast.error(err.message);
-		},
-	});
 	const { errors } = formState;
 
 	function onSubmit(data) {
-		mutate({ ...data, image: data.image[0] });
+		const image = typeof data.image === "string" ? data.image : data.image[0];
+		if (isEdit)
+			editCabin(
+				{ editCabinData: { ...data, image: image }, isEditId },
+				{
+					onSuccess: () => {
+						reset();
+						onCloseModel?.();
+					},
+				}
+			);
+		else
+			createCabin(
+				{ ...data, image: image },
+				{
+					onSuccess: () => {
+						reset();
+						onCloseModel?.();
+					},
+				}
+			);
 	}
 	return (
-		<Form onSubmit={handleSubmit(onSubmit)}>
+		<Form onSubmit={handleSubmit(onSubmit)} type={onCloseModel ? "modal" : "regular"}>
 			<FormRow lable={"Cabin name"} error={errors?.name?.message}>
 				<Input
 					type="text"
 					id="name"
-					disabled={isPending}
+					disabled={isDisable}
 					{...register("name", {
 						required: "Name is Required",
 					})}
@@ -54,7 +69,7 @@ function CreateCabinForm({ cabin = {} }) {
 				<Input
 					type="number"
 					id="maxCapacity"
-					disabled={isPending}
+					disabled={isDisable}
 					{...register("maxCapacity", {
 						required: "Capacity is Required",
 						min: {
@@ -68,7 +83,7 @@ function CreateCabinForm({ cabin = {} }) {
 			<FormRow lable={"Regular price"} error={errors?.regularPrice?.message}>
 				<Input
 					type="number"
-					disabled={isPending}
+					disabled={isDisable}
 					id="regularPrice"
 					{...register("regularPrice", {
 						required: "Regular Price is Required",
@@ -80,7 +95,7 @@ function CreateCabinForm({ cabin = {} }) {
 				<Input
 					type="number"
 					id="discount"
-					disabled={isPending}
+					disabled={isDisable}
 					defaultValue={0}
 					{...register("discount", {
 						required: "Discount is Required",
@@ -92,7 +107,7 @@ function CreateCabinForm({ cabin = {} }) {
 			<FormRow lable={"Description for website"} error={errors?.description?.message}>
 				<Textarea
 					id="description"
-					disabled={isPending}
+					disabled={isDisable}
 					defaultValue=""
 					{...register("description", {
 						required: "Description is Required",
@@ -103,24 +118,28 @@ function CreateCabinForm({ cabin = {} }) {
 			<FormRow lable={"Cabin photo"} error={errors?.image?.message}>
 				<FileInput
 					id="image"
-					disabled={isPending}
+					disabled={isDisable}
 					accept="image/*"
 					{...register("image", {
-						required: "Image is Required",
+						required: isEdit ? false : "Image is Required",
 					})}
 				/>
 			</FormRow>
 
 			<FormRow>
-				<Button type="reset" variations="secondary">
+				<Button type="reset" variations="secondary" onClick={() => onCloseModel?.()}>
 					Cancel
 				</Button>
-				<Button type="submit" disabled={isPending}>
+				<Button type="submit" disabled={isDisable}>
 					{isEdit ? "Edit Cabin" : "Create Cabin"}
 				</Button>
 			</FormRow>
 		</Form>
 	);
 }
+CreateCabinForm.propTypes = {
+	cabin: PropTypes.object,
+	onCloseModel: PropTypes.func,
+};
 
 export default CreateCabinForm;
